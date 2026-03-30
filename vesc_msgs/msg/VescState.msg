@@ -31,6 +31,10 @@ int32   fault_code
 float64 pid_pos_now
 int32 controller_id
 
+float64 servo_pose             
+float64 servo_pose_filtered
+float64 speed_ref
+int32   speed_ctrl_enabled
 
 float64 ntc_temp_mos1
 float64 ntc_temp_mos2
