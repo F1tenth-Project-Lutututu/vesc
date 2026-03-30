@@ -42,6 +42,8 @@
 #include <vesc_msgs/msg/vesc_state_stamped.hpp>
 #include <vesc_msgs/msg/vesc_imu.hpp>
 #include <vesc_msgs/msg/vesc_imu_stamped.hpp>
+#include <control_interfaces/msg/control.hpp>
+#include <vesc_msgs/msg/vesc_status.hpp>
 
 #include "vesc_driver/vesc_interface.hpp"
 #include "vesc_driver/vesc_packet.hpp"
@@ -54,6 +56,8 @@ using vesc_msgs::msg::VescState;
 using vesc_msgs::msg::VescStateStamped;
 using vesc_msgs::msg::VescImuStamped;
 using sensor_msgs::msg::Imu;
+using control_interfaces::msg::Control;
+using VescStatus_msg = vesc_msgs::msg::VescStatus;
 
 class VescDriver
   : public rclcpp::Node
@@ -97,13 +101,18 @@ private:
   rclcpp::Publisher<Imu>::SharedPtr imu_std_pub_;
 
   rclcpp::Publisher<Float64>::SharedPtr servo_sensor_pub_;
+  rclcpp::Publisher<VescStatus_msg>::SharedPtr vesc_status_pub_;
   rclcpp::SubscriptionBase::SharedPtr duty_cycle_sub_;
   rclcpp::SubscriptionBase::SharedPtr current_sub_;
   rclcpp::SubscriptionBase::SharedPtr brake_sub_;
   rclcpp::SubscriptionBase::SharedPtr speed_sub_;
   rclcpp::SubscriptionBase::SharedPtr position_sub_;
   rclcpp::SubscriptionBase::SharedPtr servo_sub_;
+  rclcpp::Subscription<Control>::SharedPtr control_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  builtin_interfaces::msg::Time last_vesc_set_stamp_{};
+  double speed_to_erpm_gain_{1.0};
+  double speed_to_erpm_offset_{0.0};
 
   // driver modes (possible states)
   typedef enum
@@ -120,6 +129,7 @@ private:
 
   // ROS callbacks
   void brakeCallback(const Float64::SharedPtr brake);
+  void controlCallback(const Control::SharedPtr ctrl);
   void currentCallback(const Float64::SharedPtr current);
   void dutyCycleCallback(const Float64::SharedPtr duty_cycle);
   void positionCallback(const Float64::SharedPtr position);

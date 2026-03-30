@@ -67,6 +67,8 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 {
   // get vesc serial port address
   std::string port = declare_parameter<std::string>("port", "");
+  speed_to_erpm_gain_ = declare_parameter<double>("speed_to_erpm_gain", 4614.0);
+  speed_to_erpm_offset_ = declare_parameter<double>("speed_to_erpm_offset", 0.0);
 
   // attempt to connect to the serial port
   try {
@@ -102,6 +104,14 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
     "commands/motor/position", rclcpp::QoS{10}, std::bind(&VescDriver::positionCallback, this, _1));
   servo_sub_ = create_subscription<Float64>(
     "commands/servo/position", rclcpp::QoS{10}, std::bind(&VescDriver::servoCallback, this, _1));
+
+  // publish VESC command status (for latency measurement)
+  vesc_status_pub_ = create_publisher<VescStatus_msg>("vesc/status", rclcpp::QoS{10});
+
+  // subscribe to control message: dispatch motor command and publish latency status
+  control_sub_ = create_subscription<Control>(
+    "/commands/ctrl", rclcpp::QoS(rclcpp::KeepLast(1)).best_effort(),
+    std::bind(&VescDriver::controlCallback, this, _1));
 
   // create a 50Hz timer, used for state machine & polling VESC telemetry
   timer_ = create_wall_timer(20ms, std::bind(&VescDriver::timerCallback, this));
@@ -261,6 +271,40 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const> & pa
 void VescDriver::vescErrorCallback(const std::string & error)
 {
   RCLCPP_ERROR(get_logger(), "%s", error.c_str());
+}
+
+/**
+ * @param ctrl Control message from control_gateway. Dispatches the appropriate VESC motor command
+ *             based on control_mode and publishes a VescStatus for latency measurement.
+ */
+void VescDriver::controlCallback(const Control::SharedPtr ctrl)
+{
+  if (driver_mode_ != MODE_OPERATING) {
+    return;
+  }
+  auto ctrl_stamp = ctrl->header.stamp;
+  last_vesc_set_stamp_ = now();
+  switch (ctrl->control_mode) {
+    case Control::CURRENT_MODE:
+      vesc_.setCurrent(current_limit_.clip(ctrl->set_current));
+      break;
+    case Control::SPEED_MODE: {
+      double erpm = speed_to_erpm_gain_ * ctrl->set_speed + speed_to_erpm_offset_;
+      vesc_.setSpeed(speed_limit_.clip(erpm));
+      break;
+    }
+    case Control::BRAKE_MODE:
+      vesc_.setBrake(brake_limit_.clip(ctrl->set_brake));
+      break;
+    default:
+      RCLCPP_WARN(get_logger(), "Unknown control_mode %d", ctrl->control_mode);
+      return;
+  }
+  auto status = VescStatus_msg();
+  status.ok = true;
+  status.control_msg_stamp = ctrl_stamp;
+  status.vesc_set_stamp = last_vesc_set_stamp_;
+  vesc_status_pub_->publish(status);
 }
 
 /**

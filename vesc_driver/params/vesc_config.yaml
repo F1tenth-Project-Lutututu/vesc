@@ -1,6 +1,8 @@
 /**:
   ros__parameters:
     port: "/dev/ttyACM0"
+    speed_to_erpm_gain: 4614.0
+    speed_to_erpm_offset: 0.0
     brake_max: 200000.0
     brake_min: -20000.0
     current_max: 100.0

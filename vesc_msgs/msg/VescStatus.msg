@@ -1,0 +1,3 @@
+bool ok
+builtin_interfaces/Time control_msg_stamp
+builtin_interfaces/Time vesc_set_stamp
